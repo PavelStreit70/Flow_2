@@ -7,8 +7,9 @@ output:
   html_document:
     toc: true
     toc_float: true
-    theme: simplex
+    theme: flatly
 ---
+#Instalace 
 
 pkgbuild::has_rtools()
 
@@ -16,42 +17,44 @@ devtools::install_github("biosurf/cyCombine")
 
 install.packages('sva')
 
+#Balíček který umí otevřít xlsx i bez Javy
+
+install.packages("openxlsx")
+
 # To ensure Rstudio looks up BioConductor packages run:
 setRepositories(ind = c(1:6, 8))
 # Then install package with
 devtools::install_github("biosurf/cyCombine")
 
-# Library loading
+# Načtení všech potřebných knihoven 
 
 ```{r setup, include=FALSE}
+
 knitr::opts_chunk$set(echo = TRUE)
 
 library(flowCore)
 library(CATALYST)
 library(cyCombine)
 library(here)
-library(xlsx)
 library(readxl)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(ggpubr)
 library(rstatix)
+library(openxlsx)
 ```
 
-## Transformácia datasetu
+## Transformace datasetu 
 
-
-1. vloženie súboru s markermi - fluorochrómami, ktoré boli použité pri meraní vzorkov (parametre, ktoré nás zaujímajú)
+1. Markery - fluorochromy, které byly použity při zpracování vzorků. Dále by měly být vidět detekční kanály a druhy markerů (type - klasifikační marker, state - funkční marker)
 
 ```{r}
-panel_annotation <- read.xlsx(here('data','metadata.xlsx'), sheetName = 'panel_annotation')
+panel_annotation <- read.xlsx(here('data','metadata.xlsx'), sheet = 'panel_annotation')
 panel_annotation
 ```
 
-
-
-2. Importovanie preprocessed FCS files 
+2. Import jednotlivých souborů z první části (gatingu)
 
 ```{r}
 dataset <- read.flowSet(path = here("outputs", "preprocessed"),
@@ -60,7 +63,7 @@ dataset <- read.flowSet(path = here("outputs", "preprocessed"),
                         truncate_max_range = F)
 ```
 
-3. Logicle transformation - pre všetky súbory vo flowSete (transformovanie parametrov z tabuľky)
+3. Logical transformace - kombinace logaritmického a lineárního škálování (vysoké x nízké hodnoty signálů). Navržena kvůli záporným hondnotám, které klasická logaritmická transformace nedokáže zpracovat.Výhodou je dobrá vizualizace, schopnost zahrnutí dorbných rozdílů, které by normálně byly potlačeny transformací.
 
 ```{r}
 
@@ -73,14 +76,14 @@ for (i in names(dataset@frames)){
   new_filename <- old_filename[1]
   complete_filename <- paste0(new_filename,"_transformed.fcs")
   print(complete_filename)
-  setwd(here('outputs','transformed'))
+  setwd(here("outputs","transformed"))
   write.FCS(data_transformed, file = complete_filename)
 }
 ```
 
 # Loading into CATALYST
 
-4. Načítanie transformovaných FCS súborov späť vo forme jedného flowSetu 
+4. Soubory byly transformovány - následně je třeba je načíst v jednom setu. Bohužel transformace nebyla u jednoho souboru provedena - důsledek nezkušenosti při gatování?
 
 ```{r}
 dataset <- read.flowSet(path = here('outputs','transformed'),
@@ -94,17 +97,16 @@ dataset <- read.flowSet(path = here('outputs','transformed'),
 panel_annotation
 ```
 
-5. Načítať anotáciu vzorkov - bude potrebná pre výsledný report + zmeniť kategoriálne dáta na faktory
+5. Změna kategorie -> faktory a poté načíst anotaci jednotlivých vzorků.
 
 ```{r}
-sample_annotation <- read.xlsx(here("data", "metadata.xlsx"), sheetName = "sample_annotation")
+
+sample_annotation <- read.xlsx(here("data", "metadata.xlsx"), sheet = "sample_annotation")
 
 str(sample_annotation)
 
 sample_annotation$Stained_or_control <- as.factor(sample_annotation$Stained_or_control)
 sample_annotation$Docetaxel <- as.factor(sample_annotation$Docetaxel)
-
-# išlo by to aj pomocou sapply?
 
 sample_annotation
 
