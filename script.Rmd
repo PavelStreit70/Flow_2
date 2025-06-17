@@ -139,7 +139,6 @@ PC <- prepData(dataset, panel_annotation, sample_annotation,
 
 ```{r}
 plotCounts(PC, group_by = 'sample_id')
-# počty buniek na jednotlivé vzorky - kontroly majú minimálny počet lebo neboli farbené (sample 1,4,6,7)
 ```
 
 # Dimensional reduction
@@ -192,11 +191,11 @@ PC <- cluster(PC,
 # Každý bod je jedna buňka.
 # Buňky, které mají podobnou expresi markerů, se v tSNE mapě seskupí blízko sebe – tvoří shluky.
 
-```{r plotDR, warning = FALSE}
+```{r plotDR 1, warning = FALSE}
 plotDR(PC, dr = "TSNE", color_by = c("meta10"))
 ```
 
-```{r plotDR, warning = FALSE}
+```{r plotDR 2, warning = FALSE}
 plotDR(PC, dr = "UMAP", color_by = c("meta10"))
 ```
 
@@ -447,16 +446,29 @@ plotDR(PC_integrated, dr = "UMAP", color_by = c("meta10"))
 # Bylo to potřeba?
 
 ```{r, warning = FALSE}
-plotDR(PC, dr = "TSNE", color_by = c("meta10"), facet_by = "Docetaxel")
+plotDR(PC, dr = "TSNE", color_by = c("meta7"), facet_by = "Docetaxel")
 ```
 
 # Data exploration
 
-34. Vizualizace dat podle markeru, který zabarví konkrétní buňky - níže v kódu vybrány pouze některé pro kontrolu, zda vše funguje. V metadatech jsou všechny markery.
+34. Vizualizace dat podle jednotlivých parametrů.
 
 ```{r, warning = FALSE}
-plotDR(PC, dr = "TSNE", color_by = c("CD9", "CD44", "CD63", "CD71", "CD81", "CD95", "CD166", "CD201"), ncol = 3)
+plotDR(PC, dr = "TSNE", color_by = c("meta7"), facet_by = "Stained_or_control")
 ```
+
+```{r, warning = FALSE}
+plotDR(PC_integrated, dr = "TSNE", color_by = c("size", "granularity"), ncol = 2)
+```
+
+```{r, warning = FALSE}
+plotDR(PC_integrated, dr = "TSNE", color_by = c("CD9", "CD44", "CD59", "CD63", "CD70", "CD71"), ncol = 3)
+```
+
+```{r, warning = FALSE}
+plotDR(PC_integrated, dr = "TSNE", color_by = c("viability", "CD81", "CD95", "CD97", "CD166", "CD201", "SSEA-4", "Ep-CAM"), ncol = 3)
+```
+
 
 35. You can also include heatmap showing the marker expression in columns and clusters in rows, for better annotation of the dataset.
 
@@ -478,78 +490,85 @@ plotExprHeatmap(PC_integrated,
 
 # Annotation
 
-36. Use the expression profile mentioned below to annotate the clusters in your dataset (fill into the cluster_annotation sheet in metadata.xlsx file). Then, load your cluster annotation here and display it in the report.
+36. Anotácia datasetu pomocou heat mapy a T-SNE
 
-- NK cells - CD45+ CD161+ 
-- healthy B cells - CD45+ CD19+ CD5- CD44-
-- leukemic B cells - CD45+ CD19+ CD5+ CD44+ 
-- naive CD4+ T cells - CD45+ CD4+ CD62L+ CD44-
-- effector-memory CD4+ T cells - CD45+ CD4+ CD62L- CD44+
-- central memory CD4+ T cells - CD45+ CD4+ CD62L+ CD44+
-- Treg - CD45+ CD4+ CD25+ GITR+
-- naive CD8+ T cells - CD45+ CD8a+ CD62L+ CD44-
-- effector-memory CD8+ T cells - CD45+ CD8a+ CD62L- CD44+
-- central memory CD8+ T cells - CD45+ CD8a+ CD62L+ CD44+ 
-- exhausted CD8+ T cells - CD45+ CD8a+ PD-1+
-- senescent CD8+ T cells - CD45+ CD8a+ KLRG-1+
-- contamination/unknown - CD45-
+1- Basal epithelial cells - Ep-CAM+, CD81 dim, CD9 dim
+2- Epithelial cells - Ep-CAM+, CD59+, CD81+
+3- Luminal epithelial cells - Ep-CAM+, CD59+, CD166 dim, CD63 dim 
+4- Prostate cancer stem cells - Ep-CAM+, SSEA-4 dim, CD44 dim, CD71 dim
+5- Cancer associated fibroblasts (?) - Ep-CAM-, CD59+, CD81 dim
+6- Unknown - Ep-CAM dim, CD59 dim
+7- Stromal Ep-CAM- cells - Ep-CAM-, CD44 dim
+
 
 ```{r}
-cluster_annotation <- 
+cluster_annotation <- read.xlsx(here('data','metadata.xlsx'), sheet = 'cluster_annotation')
+cluster_annotation 
 ```
 
-41. Use the table to annotate the clusters in your dataset - creating a new object called PB_annotated. 
+37. Use the table to annotate the clusters in your dataset - creating a new object called PC_annotated. 
 
 ```{r}
-PB_annotated <- mergeClusters(PB_integrated, 
-                              k = "meta25",
+PC_annotated <- mergeClusters(PC_integrated, 
+                              k = "meta7",
                               id = "annotation",
                               table = cluster_annotation)
 ```
 
-42. Display the annotated clusters. 
+38. Display the annotated clusters. 
 
 ```{r}
-
+plotDR(PC_annotated, dr = "TSNE", color_by = c("annotation"))
 ```
 
 # Exclusion of unwanted populations
 
-43. Exclude the contamination from your dataset using the filterSCE function. 
+39. Exclude the contamination from your dataset using the filterSCE function. 
 
 ```{r}
-PB_annotated <- filterSCE(PB_annotated, 
+PC_annotated <- filterSCE(PC_annotated, 
                           k = 'annotation',
-                          cluster_id != "unknown")
+                          cluster_id != "Unknown")
 ```
 
-44. Visualize the annotated clusters again. 
+40. Visualize the annotated clusters again. 
 
 ```{r}
+plotDR(PC_annotated, dr = "TSNE", color_by = c("annotation"))
+```
 
+```{r}
+plotDR(PC_annotated, dr = "TSNE", color_by = c("annotation"), facet_by = "Docetaxel")
+```
+
+```{r}
+plotDR(PC_annotated, dr = "TSNE", color_by = c("annotation"), facet_by = "Stained_or_control")
 ```
 
 # Differential analysis
 
-45. Plot the abundances of annotated populations for each of the samples, and group the samples together according to the CLL stage. 
+41. Plot the abundances of annotated populations for each of the samples, and group the samples together according to the CLL stage. 
 
 ```{r}
+plotAbundances(PC_annotated, k = "annotation", group_by = "Docetaxel")
 
+# 001, 004, 006 a 007 sú kontroly! čiže nemali zafarbené bunky, stromálne bunky budú skôr asi len bordel
 ```
 
 # Table export and conversion to percentages
 
-46. Export the absolute counts of cells in annotated populations from the dataset. 
+42. Export the absolute counts of cells in annotated populations from the dataset. 
 
 ```{r, warning=FALSE}
-PB_annotated$annotation <- cluster_ids(PB_annotated, "annotation")
 
-all_populations <- as.data.frame(table(PB_annotated$sample_id, group.by = PB_annotated$annotation))
+PC_annotated$annotation <- cluster_ids(PC_annotated, "annotation")
+
+all_populations <- as.data.frame(table(PC_annotated$sample_id, group.by = PC_annotated$annotation))
 all_populations <- all_populations %>% pivot_wider(names_from = group.by, values_from = Freq)
 all_populations
 ```
 
-47. Use these counts to calculate the percentages of TOTAL for each population and each mouse (using the code below). 
+43. Use these counts to calculate the percentages of TOTAL for each population and each mouse (using the code below). 
 
 ```{r}
 cols <- 2:ncol(all_populations)
@@ -562,82 +581,86 @@ perc_all_populations$TOTAL <- rowSums(perc_all_populations)
 rownames(perc_all_populations) <- all_populations$Var1
 
 sample_annotation <- sample_annotation[match(rownames(perc_all_populations), sample_annotation$Mouse_ID),]
-perc_all_populations$Stage <- as.factor(sample_annotation$Stage)
+perc_all_populations$Docetaxel <- as.factor(sample_annotation$Docetaxel)
 perc_all_populations
 ```
 
-48. Export the table with percentages as a separate csv file. 
+44. Export the table with percentages as a separate csv file. 
 
 ```{r}
-
+write.csv(perc_all_populations, file = here('outputs',"all_populations_percentages.csv"))
 ```
 
 # EXAMPLE Visualization and testing of difference in the abundance of leukemic B cells in distinct CLL stages
 
-49. Test for the distribution of leukemic B cell abundances in the dataset. Choose right statistical test + post-hoc testing accordingly (using the code below).
+45. Test for the distribution of leukemic B cell abundances in the dataset. Choose right statistical test + post-hoc testing accordingly (using the code below).
 
 ```{r}
-shapiro.test(perc_all_populations$`leukemic B cells`)
+#shapiro.test(perc_all_populations$`Basal epithelial cells`)
 ```
 
 ```{r}
-kruskal.test(`leukemic B cells` ~ Stage, perc_all_populations)
+shapiro.test(perc_all_populations$`Prostate cancer stem cells`)
+```
+
+```{r}
+shapiro.test(perc_all_populations$`Cancer associated fibroblasts`)
+```
+
+
+```{r}
+kruskal.test(`Prostate cancer stem cells` ~ `Cancer associated fibroblasts`, perc_all_populations)
+```
+```{r}
+kruskal.test(`Basal epithelial cells` ~ `Cancer associated fibroblasts`, perc_all_populations)
+```
+```{r}
+kruskal.test(`Basal epithelial cells` ~ `Prostate cancer stem cells`, perc_all_populations)
 ```
 
 ```{r}
 pairwise.wilcox.test(
-  perc_all_populations$`leukemic B cells`,
-  perc_all_populations$Stage,
+  perc_all_populations$`Prostate cancer stem cells`,
+  perc_all_populations$Docetaxel,
   p.adjust.method = 'BH')
 ```
 
-50. Visualize the abundance using the code for boxplot written below. You can also automatically include the p-values from post-hoc testing you wish to display directly in the plot via stat_pvalue_manual. 
+
+```{r}
+pairwise.wilcox.test(
+  perc_all_populations$`Basal epithelial cells`,
+  perc_all_populations$Docetaxel,
+  p.adjust.method = 'BH')
+```
+```{r}
+pairwise.wilcox.test(
+  perc_all_populations$`Cancer associated fibroblasts`,
+  perc_all_populations$Docetaxel,
+  p.adjust.method = 'BH')
+```
+
+46. Visualize the abundance using the code for boxplot written below. You can also automatically include the p-values from post-hoc testing you wish to display directly in the plot via stat_pvalue_manual. 
 
 ```{r}
 perc_all_long <- perc_all_populations %>% 
   pivot_longer(
     cols = 1:(ncol(perc_all_populations)-2), 
-    names_to = "Celltype",
+    names_to = "Stained_or_control",
     values_to = "Percentage")
-```
-
-```{r, echo=FALSE}
-CLL_plot <- perc_all_long %>% filter(Celltype == "leukemic B cells")
-CLL_plot$Celltype <- as.factor(CLL_plot$Celltype)
-
-stat.test <- perc_all_populations %>% pairwise_wilcox_test(`leukemic B cells` ~ Stage, p.adjust.method = 'BH')
-
-p <- ggplot(CLL_plot, aes(x = factor(Stage), y = Percentage)) +
-            geom_boxplot(outlier.size = 0, fill = c('#D9D9D9','#D37A7A','red','darkred')) + 
-            labs(x = "Condition", y = "% of CD45+ cells") +
-            ylim(0,105) +
-            geom_jitter(position=position_dodge(0.75)) +
-            stat_pvalue_manual(stat.test, y.position = c(88,93,98,120,120,120),label = 'p.adj',tip.length = 0.01) + 
-            theme_bw()
-p
 ```
 
 # Dataset export
 
-51. Export the annotated SingleCellExperiment object as an rds file into the ~/outputs folder. 
+47. Export the annotated SingleCellExperiment object as an rds file into the ~/outputs folder. 
 
 ```{r}
-
+saveRDS(PC_annotated, file = here('outputs','PC_data_annotated.rds'))
 ```
-
-
-# Analysis of the T cell subsets (optional homework)
-
-- Subset the dataset only to T cells. 
-- Perform dimensional reduction again and verify if in further detail, the T cell subsets have been annotated correctly. If not, then re-cluster and re-annotate the T cell populations in the T cell dataset.
-- Visualize the T cell subset abundances. 
-- Test for statistical significance in abundances of all T cell subsets between mice of different CLL stages. 
-- Visualize the abundances of T cell subsets that show significant differences in their abundance between CLL stages. 
 
 # Session info
 
-52. Do not forget to add the session info. 
+48. Do not forget to add the session info. 
 
 ```{r}
-
+sessionInfo()
 ```
