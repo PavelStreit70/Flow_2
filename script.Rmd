@@ -10,6 +10,8 @@ output:
     theme: flatly
 ---
 
+### Při knitování problém v 50% (řádek 372 - 382). Nepasují soubory. 
+
 pkgbuild::has_rtools()
 
 devtools::install_github("biosurf/cyCombine") 
