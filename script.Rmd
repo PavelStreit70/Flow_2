@@ -1,5 +1,5 @@
 ---
-title: "Flow_cytometry_xenografts_results"
+title: "Flow_cytometry_analysis_after_gating"
 author: "Streit P"
 date: "`r Sys.Date()`"
 output: 
@@ -17,8 +17,10 @@ devtools::install_github("biosurf/cyCombine")
 install.packages('sva')
 
 # To ensure Rstudio looks up BioConductor packages run:
+
 setRepositories(ind = c(1:6, 8))
 # Then install package with
+
 devtools::install_github("biosurf/cyCombine")
 
 #Balíček který umí otevřít xlsx i bez Javy hhh
@@ -214,7 +216,9 @@ plotDR(PC, dr = "TSNE", color_by = c("CD9", "CD44", "CD63", "CD71", "CD81", "CD9
 
 #Proměnná Docetaxel -> t-SNE mapa se rozdělí podle toho, zda buňky pochází z citlivých nebo rezistentních vzorků.
 
-# Batch - docházé ke vzniku drobných ostrovků - bude nutná korekce dat. 
+# Batch - asi bude nutná korekce dat.
+
+# Data jsou homogenní a špatně rozlištielná, bude problém u statistického srovnání a interpretace... 
 
 ```{r, warning = FALSE}
 plotDR(PC, dr = "TSNE", color_by = c("meta10"), facet_by = "Docetaxel")
@@ -239,7 +243,6 @@ uncorrected <- convert_flowset(flowset = dataset,
                                panel_antigen = "Marker",
                                down_sample = FALSE,
                                seed = 1)
-
 ```
 
 ## Batch correction
@@ -273,11 +276,11 @@ emd <- evaluate_emd(uncorrected = uncorrected,
                     batch_col = "batch",
                     markers = colnames(uncorrected[2:16]))
 
-#EMD = 0.23 --> snížení o 23%
+#EMD = 0.23 --> snížení o 23% =  obstojná korekce a integrace dat
 ```
 19. Výpočet MAD = jak moc korekce batch efektu ovlivnila biologickou variabilitu buněk.
 
-#Vyšlo to nula -> ztráta variability, vysoká homogenita dat, proč?
+#Vyšlo to nula -> ztráta variability, vysoká homogenita dat, proč - chyba v gatování?
 
 ```{r}
 mad <- evaluate_mad(uncorrected = uncorrected,
@@ -313,7 +316,6 @@ levels(corrected$sample)
 
 22. Export corrected FCS dat do složky integrated (z opraveného = corrected = matrixu).
 
-
 ```{r}
 for (i in levels(corrected$sample)){
   data_filtered <- corrected[corrected$sample == i, ]
@@ -338,7 +340,7 @@ dataset <- read.flowSet(path = here('outputs','integrated'),
                         #which.lines = 35000
 ```
 
-24. Načtení informací o panelu (from panel_integrated_data sheet in the metadata.xlsx file). 
+24. Načtení informací o panelu (ze souboru panel_integrated_data sheet in the metadata.xlsx file). 
 
 ```{r}
 panel_integrated <- read.xlsx(here('data','metadata.xlsx'), sheet = 'panel_integrated_data')
@@ -380,7 +382,7 @@ PC_integrated <- prepData(dataset, panel_integrated, sample_annotation_int,
                           FACS = TRUE)
 ```
 
-28. Nový graf s integrovanými daty, popisující množství buněk ve vzorcích.
+28. Nový graf s integrovanými daty, opět udávající množství buněk ve vzorcích.
 
 ```{r}
 plotCounts(PC_integrated, group_by = 'sample_id')
@@ -443,8 +445,6 @@ plotDR(PC_integrated, dr = "UMAP", color_by = c("meta10"))
 
 33. Facety pro kontrolu Batch efektu.
 
-# Bylo to potřeba?
-
 ```{r, warning = FALSE}
 plotDR(PC, dr = "TSNE", color_by = c("meta7"), facet_by = "Docetaxel")
 ```
@@ -469,28 +469,29 @@ plotDR(PC_integrated, dr = "TSNE", color_by = c("CD9", "CD44", "CD59", "CD63", "
 plotDR(PC_integrated, dr = "TSNE", color_by = c("viability", "CD81", "CD95", "CD97", "CD166", "CD201", "SSEA-4", "Ep-CAM"), ncol = 3)
 ```
 
-
-35. You can also include heatmap showing the marker expression in columns and clusters in rows, for better annotation of the dataset.
+35. Pokus o tvorbu heatmap.
 
 # Doplnit popis
 
 ```{r}
-plotExprHeatmap(PC_integrated, 
-                features = NULL,
-                by = "cluster_id", 
-                k = "meta25",
-                scale = "never", 
-                q = 0.01, 
-                perc = TRUE, 
-                col_dend = FALSE,
-                col_clust = TRUE,
-                row_dend = FALSE,
-                row_clust = FALSE)
+plotExprHeatmap(
+  PC_integrated,       # SingleCellExperiment objekt
+  features = NULL,     # NULL = použijí se všechny markery (z panelu)
+  by = "cluster_id",   # Průměrování exprese podle shluku
+  k = "meta25",        # Používá se clustering na 25 clusterů
+  scale = "never",     # Žádná normalizace hodnot
+  q = 0.01,            # Odstranění extrémních hodnot pomocí kvantilu
+  perc = TRUE,         # Používá se průměrná procentuální exprese
+  col_dend = FALSE,    # Žádná  hierarchie pro markery
+  col_clust = TRUE,    # Shlukování sloupců (markerů)
+  row_dend = FALSE,    
+  row_clust = FALSE    # Řádky (clustery) nejsou shlukovány
+)
 ```
 
 # Annotation
 
-36. Anotácia datasetu pomocou heat mapy a T-SNE
+36. Manuální anotace buněčných populací - převedena do šložky metadata.
 
 1- Basal epithelial cells - Ep-CAM+, CD81 dim, CD9 dim
 2- Epithelial cells - Ep-CAM+, CD59+, CD81+
@@ -506,7 +507,7 @@ cluster_annotation <- read.xlsx(here('data','metadata.xlsx'), sheet = 'cluster_a
 cluster_annotation 
 ```
 
-37. Use the table to annotate the clusters in your dataset - creating a new object called PC_annotated. 
+37. Anotování nových klastrů a tvorba souboru PC_annotated. 
 
 ```{r}
 PC_annotated <- mergeClusters(PC_integrated, 
@@ -515,7 +516,7 @@ PC_annotated <- mergeClusters(PC_integrated,
                               table = cluster_annotation)
 ```
 
-38. Display the annotated clusters. 
+38. Zobrazení anotovaných clusterů. Těžké na interpretaci?
 
 ```{r}
 plotDR(PC_annotated, dr = "TSNE", color_by = c("annotation"))
@@ -523,7 +524,7 @@ plotDR(PC_annotated, dr = "TSNE", color_by = c("annotation"))
 
 # Exclusion of unwanted populations
 
-39. Exclude the contamination from your dataset using the filterSCE function. 
+39. Vyloučení kontaminace -> zvýšení kvality a přesnosti analýzy. 
 
 ```{r}
 PC_annotated <- filterSCE(PC_annotated, 
@@ -531,7 +532,7 @@ PC_annotated <- filterSCE(PC_annotated,
                           cluster_id != "Unknown")
 ```
 
-40. Visualize the annotated clusters again. 
+40. Zobrazení podobné jako v předešlých případech, akorát tedy s cílem vynechat kontaminaci.
 
 ```{r}
 plotDR(PC_annotated, dr = "TSNE", color_by = c("annotation"))
@@ -545,19 +546,15 @@ plotDR(PC_annotated, dr = "TSNE", color_by = c("annotation"), facet_by = "Doceta
 plotDR(PC_annotated, dr = "TSNE", color_by = c("annotation"), facet_by = "Stained_or_control")
 ```
 
-# Differential analysis
-
-41. Plot the abundances of annotated populations for each of the samples, and group the samples together according to the CLL stage. 
+41. Vizualizaci relativního zastoupení jednotlivých buněčných populací (klastrů) - podle rezistenci k docetaxelu.
 
 ```{r}
 plotAbundances(PC_annotated, k = "annotation", group_by = "Docetaxel")
-
-# 001, 004, 006 a 007 sú kontroly! čiže nemali zafarbené bunky, stromálne bunky budú skôr asi len bordel
 ```
 
 # Table export and conversion to percentages
 
-42. Export the absolute counts of cells in annotated populations from the dataset. 
+42. Export absolutního počtu buněk v jednotlivých populacích. 
 
 ```{r, warning=FALSE}
 
@@ -568,7 +565,7 @@ all_populations <- all_populations %>% pivot_wider(names_from = group.by, values
 all_populations
 ```
 
-43. Use these counts to calculate the percentages of TOTAL for each population and each mouse (using the code below). 
+43. Procentuální množství anotovaných populací u každého vzorku.
 
 ```{r}
 cols <- 2:ncol(all_populations)
@@ -585,18 +582,18 @@ perc_all_populations$Docetaxel <- as.factor(sample_annotation$Docetaxel)
 perc_all_populations
 ```
 
-44. Export the table with percentages as a separate csv file. 
+44. Export do csv. formátu - nejvhodnější pro čtení ve většině programů. 
 
 ```{r}
 write.csv(perc_all_populations, file = here('outputs',"all_populations_percentages.csv"))
 ```
 
-# EXAMPLE Visualization and testing of difference in the abundance of leukemic B cells in distinct CLL stages
+# Pokus o statistické otestování - otázka zdali má význam s ohledem nepřesný gating (a po kontrole hodnot).
 
-45. Test for the distribution of leukemic B cell abundances in the dataset. Choose right statistical test + post-hoc testing accordingly (using the code below).
+45. Snaha o otestování distribuce podle, následně zkusit vhodně statisticky otestovat vybrané skupiny. Žádný významný výsledek však objeven nebyl.
 
 ```{r}
-#shapiro.test(perc_all_populations$`Basal epithelial cells`)
+shapiro.test(perc_all_populations$`Basal epithelial cells`)
 ```
 
 ```{r}
@@ -606,7 +603,6 @@ shapiro.test(perc_all_populations$`Prostate cancer stem cells`)
 ```{r}
 shapiro.test(perc_all_populations$`Cancer associated fibroblasts`)
 ```
-
 
 ```{r}
 kruskal.test(`Prostate cancer stem cells` ~ `Cancer associated fibroblasts`, perc_all_populations)
@@ -625,7 +621,6 @@ pairwise.wilcox.test(
   p.adjust.method = 'BH')
 ```
 
-
 ```{r}
 pairwise.wilcox.test(
   perc_all_populations$`Basal epithelial cells`,
@@ -639,7 +634,7 @@ pairwise.wilcox.test(
   p.adjust.method = 'BH')
 ```
 
-46. Visualize the abundance using the code for boxplot written below. You can also automatically include the p-values from post-hoc testing you wish to display directly in the plot via stat_pvalue_manual. 
+46. Úprava na následnou vizualizaci - ta se bohužel nezdařila :(
 
 ```{r}
 perc_all_long <- perc_all_populations %>% 
@@ -651,7 +646,7 @@ perc_all_long <- perc_all_populations %>%
 
 # Dataset export
 
-47. Export the annotated SingleCellExperiment object as an rds file into the ~/outputs folder. 
+47. Export jako rds. - jedná se formát, jež se rychle načítá a dobře se s ním pracuje při případných dalších analýzách tohoto souboru.
 
 ```{r}
 saveRDS(PC_annotated, file = here('outputs','PC_data_annotated.rds'))
@@ -659,7 +654,7 @@ saveRDS(PC_annotated, file = here('outputs','PC_data_annotated.rds'))
 
 # Session info
 
-48. Do not forget to add the session info. 
+48. Informace o souboru.
 
 ```{r}
 sessionInfo()
