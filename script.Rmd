@@ -11,6 +11,7 @@ output:
 ---
 
 ### Při knitování problém v 50% (řádek 372 - 382). Nepasují soubory. 
+### Neuvěřitelně dlouhý zásek ve 12 chunku.
 
 pkgbuild::has_rtools()
 
