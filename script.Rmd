@@ -1,15 +1,14 @@
 ---
 title: "Flow_cytometry_xenografts_results"
-author: "Streit P"
+author: "Ingrid P"
 date: "`r Sys.Date()`"
 output: 
 
   html_document:
     toc: true
     toc_float: true
-    theme: flatly
+    theme: simplex
 ---
-#Instalace 
 
 pkgbuild::has_rtools()
 
@@ -17,44 +16,42 @@ devtools::install_github("biosurf/cyCombine")
 
 install.packages('sva')
 
-#Balíček který umí otevřít xlsx i bez Javy
-
-install.packages("openxlsx")
-
 # To ensure Rstudio looks up BioConductor packages run:
 setRepositories(ind = c(1:6, 8))
 # Then install package with
 devtools::install_github("biosurf/cyCombine")
 
-# Načtení všech potřebných knihoven 
+# Library loading
 
 ```{r setup, include=FALSE}
-
 knitr::opts_chunk$set(echo = TRUE)
 
 library(flowCore)
 library(CATALYST)
 library(cyCombine)
 library(here)
+library(xlsx)
 library(readxl)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(ggpubr)
 library(rstatix)
-library(openxlsx)
 ```
 
-## Transformace datasetu 
+## Transformácia datasetu
 
-1. Markery - fluorochromy, které byly použity při zpracování vzorků. Dále by měly být vidět detekční kanály a druhy markerů (type - klasifikační marker, state - funkční marker)
+
+1. vloženie súboru s markermi - fluorochrómami, ktoré boli použité pri meraní vzorkov (parametre, ktoré nás zaujímajú)
 
 ```{r}
-panel_annotation <- read.xlsx(here('data','metadata.xlsx'), sheet = 'panel_annotation')
+panel_annotation <- read.xlsx(here('data','metadata.xlsx'), sheetName = 'panel_annotation')
 panel_annotation
 ```
 
-2. Import jednotlivých souborů z první části (gatingu).
+
+
+2. Importovanie preprocessed FCS files 
 
 ```{r}
 dataset <- read.flowSet(path = here("outputs", "preprocessed"),
@@ -63,7 +60,7 @@ dataset <- read.flowSet(path = here("outputs", "preprocessed"),
                         truncate_max_range = F)
 ```
 
-3. Logical transformace - kombinace logaritmického a lineárního škálování (vysoké x nízké hodnoty signálů). Navržena kvůli záporným hondnotám, které klasická logaritmická transformace nedokáže zpracovat.Výhodou je dobrá vizualizace, schopnost zahrnutí dorbných rozdílů, které by normálně byly potlačeny transformací.
+3. Logicle transformation - pre všetky súbory vo flowSete (transformovanie parametrov z tabuľky)
 
 ```{r}
 
@@ -76,14 +73,14 @@ for (i in names(dataset@frames)){
   new_filename <- old_filename[1]
   complete_filename <- paste0(new_filename,"_transformed.fcs")
   print(complete_filename)
-  setwd(here("outputs","transformed"))
+  setwd(here('outputs','transformed'))
   write.FCS(data_transformed, file = complete_filename)
 }
 ```
 
 # Loading into CATALYST
 
-4. Soubory byly transformovány - následně je třeba je načíst v jednom setu. Bohužel transformace nebyla u jednoho souboru provedena - důsledek nezkušenosti při gatování?
+4. Načítanie transformovaných FCS súborov späť vo forme jedného flowSetu 
 
 ```{r}
 dataset <- read.flowSet(path = here('outputs','transformed'),
@@ -97,62 +94,65 @@ dataset <- read.flowSet(path = here('outputs','transformed'),
 panel_annotation
 ```
 
-5. Změna kategorie -> na faktory a poté načíst anotaci jednotlivých vzorků (jedná se o kategorickou proměnnou).
+5. Načítať anotáciu vzorkov - bude potrebná pre výsledný report + zmeniť kategoriálne dáta na faktory
 
 ```{r}
-
-sample_annotation <- read.xlsx(here("data", "metadata.xlsx"), sheet = "sample_annotation")
+sample_annotation <- read.xlsx(here("data", "metadata.xlsx"), sheetName = "sample_annotation")
 
 str(sample_annotation)
 
 sample_annotation$Stained_or_control <- as.factor(sample_annotation$Stained_or_control)
 sample_annotation$Docetaxel <- as.factor(sample_annotation$Docetaxel)
 
+# išlo by to aj pomocou sapply?
+
 sample_annotation
 
 ```
 
-6. Pořadí souborů by se mělo shodovat s tabulkou - tudíž bude nutné soubory přeuspořádat. Hodí se i případná kontrola, zda vše odpovídá a pořádí není rozhozené.
-
-# V prvním kroku načíst názvy z datasetu
-# Reorganizace tabulky aby byla v pořadí v jakém jsou FSC soubory
-# Kontrola - pokud dostaneme 0 - znamená to, že vše se shoduje
+6. Poradie súborov FCS (frames) zoradiť v rovnakom poradí ako v tabuľke annotation_table (riadky) + kontrola
 
 ```{r}
 fcs_files <-names(dataset@frames)
 
 fcs_files
+# či poradie framov v datasete je rovnake ako FCSka v tabuľke - naloadujeme názvy z datasetu
 ```
+
 ```{r}
 sample_annotation <- sample_annotation[match(fcs_files, sample_annotation$Filename),]
+
+sample_annotation
+# preusporiadame tabuľku aby bola v poradí FCS files; 
 ```
 
 ```{r}
 sum((names(dataset@frames) == sample_annotation$Filename) == FALSE)
+
+#ak výsledok 0 = stlpce a riadky su zhodne
 ```
-7. Sestavení SingleCellExperiment. Jedná se o speciální balíček, který slouží k analýze dat jednotlivých buněk. Analýza je multiparametrická - máme vícero různých markerů. Budou se zde postupně vkládat naše data.
+7. Vytvorenie SingleCellExperiment objektu, ktorý bude obnášať multiparamterickú flow analýzu (kód len skopírovaný z cvičenia)
 
 ```{r}
-
 PC <- prepData(dataset, panel_annotation, sample_annotation,
                panel_cols = list(channel = "Fluorochrome", antigen = "Marker", marker_class = 'Marker_class'),
                md_cols = list(file = "Filename", id = "Samples",
                               factors = c("Stained_or_control", "Docetaxel")),
                FACS = TRUE)
+
+# zadefinované stlpce pre panel
 ```
 
-8. Vygenerujeme graf, který nám říká, kolik buněk mají jednotlivé vzorky. Izotypové kontroly nebývají specificky barvené a i z jiných důvodů by měly obsahovat méně buněk (kratší čas analýzy, množství, které se jich pro analýzu přpravuje).
-
+8. Vygenerovaný graf s počtami buniek v datasete
 ```{r}
 plotCounts(PC, group_by = 'sample_id')
-
-# nicméně se výše uvedené očekávání se nepotvrdilo - chyba při gatování? 
+# počty buniek na jednotlivé vzorky - kontroly majú minimálny počet lebo neboli farbené (sample 1,4,6,7)
 ```
 
 # Dimensional reduction
 ## t-SNE
 
-9.t-SNE (t-distributed Stochastic Neighbor Embedding) je metoda dimenzionální redukce (nelinearita), která se rpoužívá k vizualizaci vysoce dimenzionálních dat. Jde o redukce dimenzí tak, aby blízké buňky zůstaly blízko a vzdálené buňky zůstaly oddělené.
+9.Redukcia dimenzií a tvorba mapy = t-SNE - z 20 000 buniek
 
 
 ```{r}
@@ -165,9 +165,9 @@ PC <- runDR(PC,
             verbose = TRUE)
 ```
 
-# UMAP
+## UMAP
+10.Redukcia dimenzií a tvorba mapy = UMAP - z 20 000 buniek
 
-10. Metoda, která je obdobná t-SNE, ncméně by měla být ještě o něco přesnější a rychlejší. Jedná se o převod do 2D nebo 3D struktury takovým způsobem, aby se zachovaly i struktury, kde jsou buňky mezi sebou více vzdálené.
 
 ```{r}
 PC <- runDR(PC, 
@@ -179,64 +179,52 @@ PC <- runDR(PC,
 ```
 
 # Clustering
-
-11. FlowSom clustery. SOM - (Self-Organizing Map) -> Algoritmus rozloží buňky na základě jejich podobnosti do mřížky. Rozměry mřížky si můžeme sami definovat - nejčastěji podle velikosti datasetu -> zde by měla být odpovídající mřížka 10 x 10 anebo 15 x 15.
+11. Tvorba FlowSOM clustrov (using all features, 15 x 15 grid and resulting in 50 final metaclusters) 
 
 ```{r}
 PC <- cluster(PC, 
               features = NULL, 
-              xdim = 10, 
-              ydim = 10, 
+              xdim = 15, 
+              ydim = 15, 
               maxK = 50, 
               verbose = TRUE, 
               seed = 1)
 ```
+
 # Data visualization
 
-12. Zobrazení/vizualizace clusterů (t-SNE i UMAP). Můžeme zaměnit i počet clusterů - meta15 nebo meta20 - výsledky se v takovém případě budou lehce odlišovat. Menší počet nám zjednosušší interpretaci, vyšší počet nám dá větší přehled a více detailů.
+12. Vizualizácia clustrov pomocou t-SNE aj UMAP
 
 
 ```{r plotDR, warning = FALSE}
-plotDR(PC, dr = "TSNE", color_by = c("meta10"))
+plotDR(PC, dr = "TSNE", color_by = c("meta15"))
 ```
-
-# Každý bod je jedna buňka.
-# Buňky, které mají podobnou expresi markerů, se v tSNE mapě seskupí blízko sebe – tvoří shluky.
 
 ```{r plotDR, warning = FALSE}
-plotDR(PC, dr = "UMAP", color_by = c("meta10"))
+plotDR(PC, dr = "UMAP", color_by = c("meta15"))
 ```
 
-13. Vizualizace dat podle markeru, který zabarví konkrétní buňky - níže v kódu vybrány pouze některé pro kontrolu, zda vše funguje. V metadatech jsou všechny markery.
+# Data exploration and quality check
 
-Další markery zájmu: CD9, CD44, CD59, CD63, CD70, CD71, CD81, CD95, CD97, CD166, CD201, SSEA-4, EpCAM. 
+13. Vizualizácia dát a ich zafarbenie niektorými markermi, ktoré sme si vybrali
 
 ```{r, warning = FALSE}
-plotDR(PC, dr = "TSNE", color_by = c("CD9", "CD44", "CD59", "CD70", "CD71", "CD97", "CD201"), ncol = 3)
+plotDR(PC, dr = "TSNE", color_by = c("CD9", "CD44", "CD63", "CD71", "CD81", "CD95", "CD166", "CD201"), ncol = 3)
 ```
 
-14. Facetování t-SNE
-
-#Facetování = rozdělení grafu do panelů podle určité proměnné (zde se jedná o Docetaxel)
-
-#Docetaxel = polosyntetická látka vzniklá úpravou molekuly paklitaxelu. V medicíně je využíván jako cytostatikum (používání v protinádorové léčbě).
-
-#Proměnná Docetaxel -> t-SNE mapa se rozdělí podle toho, zda buňky pochází z citlivých nebo rezistentních vzorků.
-
-# Batch - docházé ke vzniku drobných ostrovků - bude nutná korekce dat. 
+14.Facetovanie t-SNE premennou, ktorú si vyberieme, napr. použitím parametru Docetaxel. Vidíme batch effect?? - je potrebná korekcia dát
 
 ```{r, warning = FALSE}
-plotDR(PC, dr = "TSNE", color_by = c("meta10"), facet_by = "Docetaxel")
+plotDR(PC, dr = "TSNE", color_by = c("meta15"), facet_by = "Docetaxel")
 ```
 
 # Data integration
-
 ## Data loading and conversion into dataframe
 
-15. Tvorba velkého data.frame, který nám pomůže data integrovat (z různých zdrojů do jednoho).
+15. Vytvorenie dataframe-u pre integráciu
+ 
 
 ```{r}
-
 uncorrected <- convert_flowset(flowset = dataset,
                                metadata = sample_annotation,
                                filename_col = "Filename",
@@ -249,12 +237,15 @@ uncorrected <- convert_flowset(flowset = dataset,
                                panel_antigen = "Marker",
                                down_sample = FALSE,
                                seed = 1)
+# anchor - tie, čo naprieč batchmi budú vyzerať rovnako (v tomto prípade by kontroly mali byť rovnaké)
 
 ```
+
 ## Batch correction
 
-16. Pomocí CyCombine (umí integrovat, normalizovat, transformovat, ...) se zkusí opravit Batch.
- 
+16. Rozbehnutie batch correction pomocou cyCombine
+. 
+
 ```{r}
 corrected <- batch_correct(df = uncorrected,
                            covar = "condition",
@@ -265,7 +256,8 @@ corrected <- batch_correct(df = uncorrected,
                            anchor = "anchor")
 ```
 
-17. Převod tabulky zpět do data.frame.
+17. Konvertovanie upravenej tabuľky späť do dataframe-u
+
 
 ```{r}
 corrected <- data.frame(corrected)
@@ -273,40 +265,20 @@ corrected <- data.frame(corrected)
 
 ## Evaluation the efficacy of the batch correction
 
-18. Výpočet procentuální redukce Batch efektu.
+18. Z koľkých percent sa podarilo znížiť Batch efekt v našich dátach = EMD (porovnanie nekorektovaných a korektovaných matíc)
+
 
 ```{r}
-
-any(is.na(uncorrected))
-any(is.na(corrected))
-
-colnames(uncorrected)
-colnames(corrected)
-
-evaluate_emd(uncorrected = uncorrected,
-             corrected = corrected,
-             cell_col = "condition",
-             batch_col = "batch",
-             markers = markers)
-
-table(uncorrected$condition, uncorrected$batch)
-table(corrected$condition, corrected$batch)
-
 emd <- evaluate_emd(uncorrected = uncorrected,
                     corrected = corrected,
                     cell_col = "condition",
                     batch_col = "batch",
                     markers = colnames(uncorrected[2:16]))
 
+#EMD = 0.72 --> zníženie batch efektu u dát o 72 %
 ```
+19. Pozrieme sa na stratu biologickej vaariability
 
-#Tím pádem nemáš žádný překryv nebo společné podmnožiny buněk mezi batch, což EMD (Earth Mover’s Distance) potřebuje, aby mohl správně spočítat vzdálenost mezi distribucemi před a po korekci.
-
-#Je tam chyba, které EMD neumožní spočítat (nejsou tam zastoupeny obě skupiny), nevím, jak to řešit
-
-19. Výpočet MAD = jak moc korekce batch efektu ovlivnila biologickou variabilitu buněk.
-
-#Vyšlo to nula -> ztráta variability, vysoká homogenita dat, proč?
 
 ```{r}
 mad <- evaluate_mad(uncorrected = uncorrected,
@@ -314,26 +286,38 @@ mad <- evaluate_mad(uncorrected = uncorrected,
                     cell_col = "condition",
                     batch_col = "batch",
                     markers = colnames(uncorrected[2:16]))
+
+# MAD = 0.01 - stratili sme len jedno percento biologickej variability 
+
 ```
 
 ## Preparation for FCS file export
 
-24. Now, delete all the columns that DO NOT correspond to measured parameters or sample ID (for the FCS export in the next step). 
+20. V tabuľke corrected odstrániť stlpce, ktoré nesúvisia s markermi (sample, batch, condition, anchor) pre export FCS súborov
+
 
 ```{r}
+corrected$id <- NULL
+corrected$label <- NULL
+corrected$condition <- NULL
+corrected$anchor <- NULL
+corrected$batch <- NULL
 
+corrected
 ```
 
-25. Then, change the sample IDs to factor and display all the levels. 
+21. Zmeniť stlpec sample na faktor + načítať vo všetkých leveloch
 
 ```{r}
-
+corrected$sample <- as.factor(corrected$sample)
+levels(corrected$sample)
 ```
 
 
 ## For loop for export
 
-26. Use the for loop below to export all FCS files from the corrected expression matrix (they should appear in the ~/outputs/integrated folder). 
+22. Použitý predpísaný for cyklus pre export integrated FCS súborov (z opraveného = corrected = matrixu)
+
 
 ```{r}
 for (i in levels(corrected$sample)){
@@ -349,7 +333,8 @@ for (i in levels(corrected$sample)){
 
 # Loading into CATALYST - integrated data
 
-27. Load the integrated FCS files back as a flowSet. 
+23. Integrované FCS dáta načítať späť ako flowSet
+ 
 
 ```{r}
 dataset <- read.flowSet(path = here('outputs','integrated'),
@@ -357,101 +342,132 @@ dataset <- read.flowSet(path = here('outputs','integrated'),
                         transformation = FALSE,
                         truncate_max_range = FALSE)
                         #which.lines = 35000
-```
 
-28. Re-load the panel info as panel_integrated (from panel_integrated_data sheet in the metadata.xlsx file). 
-
-```{r}
-panel_integrated <- 
-```
-
-```{r}
-sample_annotation
-```
-
-29. Again, extract the order of the FCS files from the flowSet and use it for re-ordering of the rows in the sample annotation table. Then, double check if the order of the rows is the same as the order of frames in the flowSet. Caution, this time you're working with the column Filename_integrated.
-
-```{r}
 
 ```
 
+24. Znova načítať panel s markermi (no z iného sheetu, kde sú fluorochrómy označené ako CD markre)
+
+```{r}
+panel_integrated <- read.xlsx(here('data','metadata.xlsx'), sheetName = 'panel_integrated_data')
+panel_integrated
+```
+
+25. pred zoradením FCS súbor v rovnakom poradí (v fcs_files aj sample_annotation$Filename_integrated) skontrolujem, či sa volajú rovnako
 ```{r}
 
+sample_annotation$Filename_integrated
+
+```
+26. Rovnaký ako bod 6., no tu pracujeme so stlpcom Filename_integrated: Poradie súborov FCS (frames) zoradiť v rovnakom poradí ako v tabuľke annotation_table (riadky) + kontrola
+
+
+```{r}
+fcs_files <- names(dataset@frames)
+fcs_files
 ```
 
 ```{r}
-sum((names(dataset@frames) == sample_annotation$Filename_integrated) == FALSE)
+
+sample_annotation_int <- sample_annotation[match(fcs_files, sample_annotation$Filename_integrated),]
+ 
+
+
+sample_annotation_int
 ```
 
-30. Assemble another SingleCellExperiment filling in the code below (again beware, you want to use the Filename_integrated column from sample annotation now). 
+```{r}
+sum((names(dataset@frames) == sample_annotation_int$Filename_integrated) == FALSE)
+```
+27. Ďalší SingleCellExperiment, tentokrát s Filename_integrated 
 
 ```{r}
-PB_integrated <- prepData(dataset, panel_integrated, sample_annotation,
+PC_integrated <- prepData(dataset, panel_integrated, sample_annotation_int,
                           panel_cols = list(channel = "Fluorochrome", 
                                             antigen = "Marker", 
                                             marker_class = 'Marker_class'),
                           md_cols = list(file = "Filename_integrated", 
-                                         id = "Mouse_ID",
-                          factors = c("Stage", "Run")),
+                                         id = "Samples",
+                          factors = c("Stained_or_control", "Docetaxel")),
                           FACS = TRUE)
 ```
 
-31. Again, plot the numbers of cells for each sample in the integrated dataset. 
+
+28. Znova - Vygenerovaný graf s počtami buniek v integrovanom datasete
+ 
 
 ```{r}
-
+plotCounts(PC_integrated, group_by = 'sample_id')
 ```
 
 # Dimensional reduction
 
 ## t-SNE
 
-32. Perform t-SNE on integrated data, again taking all features and 2000 cells per sample. 
+29. t-SNE na integrovaných dátach (z 20 000 buniek/vzorka)
+ 
 
 ```{r}
-
+PC_integrated <- runDR(PC_integrated, 
+                       dr = "TSNE", 
+                       cells = 20000, 
+                       features = NULL,
+                       assay = "exprs",
+                       seed = 1,
+                       verbose = TRUE)
 ```
 
 ## UMAP
 
-33. Perform UMAP on integrated data, again taking all features and 2000 cells per sample.
+30. UMAP na integrovaných dátach (z 20 000 buniek/ vzorka)
 
 ```{r}
-
+PC_integrated <- runDR(PC_integrated, 
+                       dr = "UMAP", 
+                       cells = 20000,
+                       features = NULL,
+                       assay = "exprs",
+                       verbose = TRUE)
 ```
 
 # Clustering
 
-34. Perform FlowSOM clustering on integrated data, again using all cells, all features, 15 x 15 grid and aiming for 50 final metaclusters.
+31. FlowSOM clustering na integrovaných dátach, použijeme všetky bunky, všetky vlastnosti a tvorba 50 finálnych megaclusterov z 15x15 mriežky
 
 ```{r}
-
+PC_integrated <- cluster(PC_integrated, 
+                         features = NULL, 
+                         xdim = 15, 
+                         ydim = 15, 
+                         maxK = 50, 
+                         verbose = TRUE, 
+                         seed = 1)
 ```
 
 # Data visualization and quality check
 
-36. Visualize both t-SNE and UMAP reductions. Which one is better now?
+32. Vizualizácia t-SNE a UMAP redukcií 
 
 ```{r}
-
+plotDR(PC_integrated, dr = "TSNE", color_by = c("meta15"))
 ```
 
 ```{r}
-
+plotDR(PC_integrated, dr = "UMAP", color_by = c("meta15"))
 ```
-
-37. Facet the t-SNE reduction by run ID and check for the batch effect correction. 
+33. Facetovanie pre kontrolu batch efektu - batch efekt nebol potrebný?? Vyzerá to podobne ako pred ním
 
 ```{r, warning = FALSE}
-
+plotDR(PC, dr = "TSNE", color_by = c("meta15"), facet_by = "Docetaxel")
 ```
 
 # Data exploration
 
-38. Perform the exploratory steps, faceting your dataset by CLL stage and coloring the dimred by all measured parameters. 
+34. Vizualizácia všetkých parametrov
+
 
 ```{r, warning = FALSE}
-
+plotDR(PC, dr = "TSNE", color_by = c("meta15"), facet_by = "Stained_or")
 ```
 
 ```{r, warning = FALSE}
