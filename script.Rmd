@@ -97,7 +97,7 @@ dataset <- read.flowSet(path = here('outputs','transformed'),
 panel_annotation
 ```
 
-5. Změna kategorie -> faktory a poté načíst anotaci jednotlivých vzorků.
+5. Změna kategorie -> na faktory a poté načíst anotaci jednotlivých vzorků (jedná se o kategorickou proměnnou).
 
 ```{r}
 
@@ -112,25 +112,26 @@ sample_annotation
 
 ```
 
-6. Poradie súborov FCS (frames) zoradiť v rovnakom poradí ako v tabuľke annotation_table (riadky) + kontrola
+6. Pořadí souborů by se mělo shodovat s tabulkou - tudíž bude nutné soubory přeuspořádat. Hodí se i případná kontrola, zda vše odpovídá a pořádí není rozhozené.
+
+# V prvním kroku načíst názvy z datasetu
+# Reorganizace tabulky aby byla v pořadí v jakém jsou FSC soubory
+# Kontrola - pokud dostaneme 0 - znamená to, že vše se shoduje
 
 ```{r}
 fcs_files <-names(dataset@frames)
 
 fcs_files
-# či poradie framov v datasete je rovnake ako FCSka v tabuľke - naloadujeme názvy z datasetu
 ```
 
 ```{r}
 sample_annotation <- sample_annotation[match(fcs_files, sample_annotation$Filename),]
-# preusporiadame tabuľku aby bola v poradí FCS files; 
 ```
 
 ```{r}
 sum((names(dataset@frames) == sample_annotation$Filename) == FALSE)
-
-#ak výsledok 0 = stlpce a riadky su zhodne
 ```
+
 7. Vytvorenie SingleCellExperiment objektu, ktorý bude obnášať multiparamterickú flow analýzu (kód len skopírovaný z cvičenia)
 
 ```{r}
