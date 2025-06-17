@@ -54,7 +54,7 @@ panel_annotation <- read.xlsx(here('data','metadata.xlsx'), sheet = 'panel_annot
 panel_annotation
 ```
 
-2. Import jednotlivých souborů z první části (gatingu)
+2. Import jednotlivých souborů z první části (gatingu).
 
 ```{r}
 dataset <- read.flowSet(path = here("outputs", "preprocessed"),
@@ -123,7 +123,6 @@ fcs_files <-names(dataset@frames)
 
 fcs_files
 ```
-
 ```{r}
 sample_annotation <- sample_annotation[match(fcs_files, sample_annotation$Filename),]
 ```
@@ -131,29 +130,29 @@ sample_annotation <- sample_annotation[match(fcs_files, sample_annotation$Filena
 ```{r}
 sum((names(dataset@frames) == sample_annotation$Filename) == FALSE)
 ```
-
-7. Vytvorenie SingleCellExperiment objektu, ktorý bude obnášať multiparamterickú flow analýzu (kód len skopírovaný z cvičenia)
+7. Sestavení SingleCellExperiment. Jedná se o speciální balíček, který slouží k analýze dat jednotlivých buněk. Analýza je multiparametrická - máme vícero různých markerů. Budou se zde postupně vkládat naše data.
 
 ```{r}
+
 PC <- prepData(dataset, panel_annotation, sample_annotation,
                panel_cols = list(channel = "Fluorochrome", antigen = "Marker", marker_class = 'Marker_class'),
                md_cols = list(file = "Filename", id = "Samples",
                               factors = c("Stained_or_control", "Docetaxel")),
                FACS = TRUE)
-
-# zadefinované stlpce pre panel
 ```
 
-8. Vygenerovaný graf s počtami buniek v datasete
+8. Vygenerujeme graf, který nám říká, kolik buněk mají jednotlivé vzorky. Izotypové kontroly nebývají specificky barvené a i z jiných důvodů by měly obsahovat méně buněk (kratší čas analýzy, množství, které se jich pro analýzu přpravuje).
+
 ```{r}
 plotCounts(PC, group_by = 'sample_id')
-# počty buniek na jednotlivé vzorky - kontroly majú minimálny počet lebo neboli farbené (sample 1,4,6,7)
+
+# nicméně se výše uvedené očekávání se nepotvrdilo - chyba při gatování? 
 ```
 
 # Dimensional reduction
 ## t-SNE
 
-9.Redukcia dimenzií a tvorba mapy = t-SNE - z 20 000 buniek
+9.t-SNE (t-distributed Stochastic Neighbor Embedding) je metoda dimenzionální redukce (nelinearita), která se rpoužívá k vizualizaci vysoce dimenzionálních dat. Jde o redukce dimenzí tak, aby blízké buňky zůstaly blízko a vzdálené buňky zůstaly oddělené.
 
 
 ```{r}
@@ -166,9 +165,9 @@ PC <- runDR(PC,
             verbose = TRUE)
 ```
 
-## UMAP
-10.Redukcia dimenzií a tvorba mapy = UMAP - z 20 000 buniek
+# UMAP
 
+10. Metoda, která je obdobná t-SNE, ncméně by měla být ještě o něco přesnější a rychlejší. Jedná se o převod do 2D nebo 3D struktury takovým způsobem, aby se zachovaly i struktury, kde jsou buňky mezi sebou více vzdálené.
 
 ```{r}
 PC <- runDR(PC, 
@@ -180,29 +179,32 @@ PC <- runDR(PC,
 ```
 
 # Clustering
-11. Tvorba FlowSOM clustrov (using all features, 15 x 15 grid and resulting in 50 final metaclusters) 
+
+11. FlowSom clustery. SOM - (Self-Organizing Map) -> Algoritmus rozloží buňky na základě jejich podobnosti do mřížky. Rozměry mřížky si můžeme sami definovat - nejčastěji podle velikosti datasetu -> zde by měla být odpovídající mřížka 10 x 10 anebo 15 x 15.
 
 ```{r}
 PC <- cluster(PC, 
               features = NULL, 
-              xdim = 15, 
-              ydim = 15, 
+              xdim = 10, 
+              ydim = 10, 
               maxK = 50, 
               verbose = TRUE, 
               seed = 1)
 ```
-
 # Data visualization
 
-12. Vizualizácia clustrov pomocou t-SNE aj UMAP
+12. Zobrazení/vizualizace clusterů (t-SNE i UMAP). Můžeme zaměnit i počet clusterů - meta15 nebo meta20 - výsledky se v takovém případě budou lehce odlišovat. Menší počet nám zjednosušší interpretaci, vyšší počet nám dá větší přehled a více detailů.
 
 
 ```{r plotDR, warning = FALSE}
-plotDR(PC, dr = "TSNE", color_by = c("meta15"))
+plotDR(PC, dr = "TSNE", color_by = c("meta10"))
 ```
 
+# Každý bod je jedna buňka.
+# Buňky, které mají podobnou expresi markerů, se v tSNE mapě seskupí blízko sebe – tvoří shluky.
+
 ```{r plotDR, warning = FALSE}
-plotDR(PC, dr = "UMAP", color_by = c("meta15"))
+plotDR(PC, dr = "UMAP", color_by = c("meta10"))
 ```
 
 # Data exploration and quality check
