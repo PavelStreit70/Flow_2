@@ -207,48 +207,54 @@ plotDR(PC, dr = "TSNE", color_by = c("meta10"))
 plotDR(PC, dr = "UMAP", color_by = c("meta10"))
 ```
 
-# Data exploration and quality check
+13. Vizualizace dat podle markeru, který zabarví konkrétní buňky - níže v kódu vybrány pouze některé pro kontrolu, zda vše funguje. V metadatech jsou všechny markery.
 
-13. Vizualizácia dát a ich zafarbenie niektorými markermi, ktoré sme si vybrali
+Další markery zájmu: CD9, CD44, CD59, CD63, CD70, CD71, CD81, CD95, CD97, CD166, CD201, SSEA-4, EpCAM. 
 
 ```{r, warning = FALSE}
-plotDR(PC, dr = "TSNE", color_by = c("CD9", "CD44", "CD63", "CD71", "CD81", "CD95", "CD166", "CD201"), ncol = 3)
+plotDR(PC, dr = "TSNE", color_by = c("CD9", "CD44", "CD59", "CD70", "CD71", "CD97", "CD201"), ncol = 3)
 ```
 
-14.Facetovanie t-SNE premennou, ktorú si vyberieme, napr. použitím paramteru Docetaxel. Vidíme batch effect - je potrebná korekcia dát
+14. Facetování t-SNE
+
+#Facetování = rozdělení grafu do panelů podle určité proměnné (zde se jedná o Docetaxel)
+
+#Docetaxel = polosyntetická látka vzniklá úpravou molekuly paklitaxelu. V medicíně je využíván jako cytostatikum (používání v protinádorové léčbě).
+
+#Proměnná Docetaxel -> t-SNE mapa se rozdělí podle toho, zda buňky pochází z citlivých nebo rezistentních vzorků.
+
+# Batch - docházé ke vzniku drobných ostrovků - bude nutná korekce dat. 
 
 ```{r, warning = FALSE}
-plotDR(PC, dr = "TSNE", color_by = c("meta15"), facet_by = "Docetaxel")
+plotDR(PC, dr = "TSNE", color_by = c("meta10"), facet_by = "Docetaxel")
 ```
 
 # Data integration
+
 ## Data loading and conversion into dataframe
 
-15. Vytvorenie dataframe-u pre integráciu
- 
+15. Tvorba velkého data.frame, který nám pomůže data integrovat (z různých zdrojů do jednoho).
 
 ```{r}
+
 uncorrected <- convert_flowset(flowset = dataset,
                                metadata = sample_annotation,
                                filename_col = "Filename",
                                sample_ids = "Samples", 
                                batch_ids = "Docetaxel",
-                               condition = "Docetaxel",
+                               condition = "Stained_or_control",
                                anchor =  "Stained_or_control",
                                panel = panel_annotation, 
                                panel_channel = "Fluorochrome",
                                panel_antigen = "Marker",
                                down_sample = FALSE,
                                seed = 1)
-# anchor - tie, čo naprieč batchmi budú vyzerať rovnako (v tomto prípade by kontroly mali byť rovnaké)
 
 ```
-
 ## Batch correction
 
-16. Rozbehnutie batch correction pomocou cyCombine
-. 
-
+16. Pomocí CyCombine (umí integrovat, normalizovat, transformovat, ...) se zkusí opravit Batch.
+ 
 ```{r}
 corrected <- batch_correct(df = uncorrected,
                            covar = "condition",
@@ -259,8 +265,7 @@ corrected <- batch_correct(df = uncorrected,
                            anchor = "anchor")
 ```
 
-17. Konvertovanie upravenej tabuľky späť do dataframe-u
-
+17. Převod tabulky zpět do data.frame.
 
 ```{r}
 corrected <- data.frame(corrected)
@@ -268,23 +273,47 @@ corrected <- data.frame(corrected)
 
 ## Evaluation the efficacy of the batch correction
 
-18. Z koľkých percent sa podarilo znížiť Batch efekt v našich dátach = EMD (porovnanie nekorektovaných a korektovaných matíc)
-
+18. Výpočet procentuální redukce Batch efektu.
 
 ```{r}
+
+any(is.na(uncorrected))
+any(is.na(corrected))
+
+colnames(uncorrected)
+colnames(corrected)
+
+evaluate_emd(uncorrected = uncorrected,
+             corrected = corrected,
+             cell_col = "condition",
+             batch_col = "batch",
+             markers = markers)
+
+table(uncorrected$condition, uncorrected$batch)
+table(corrected$condition, corrected$batch)
+
 emd <- evaluate_emd(uncorrected = uncorrected,
                     corrected = corrected,
                     cell_col = "condition",
                     batch_col = "batch",
                     markers = colnames(uncorrected[2:16]))
 
-#NaN = not a number...niečo je zle
 ```
 
-23. Calculate MAD to estimate the loss of biological heterogeneity. 
+#Tím pádem nemáš žádný překryv nebo společné podmnožiny buněk mezi batch, což EMD (Earth Mover’s Distance) potřebuje, aby mohl správně spočítat vzdálenost mezi distribucemi před a po korekci.
+
+#Je tam chyba, které EMD neumožní spočítat (nejsou tam zastoupeny obě skupiny), nevím, jak to řešit
+
+19. Výpočet MAD = jak moc korekce batch efektu ovlivnila biologickou variabilitu buněk.
+
+#Vyšlo to nula -> ztráta variability, vysoká homogenita dat, proč?
 
 ```{r}
-
+mad <- evaluate_mad(uncorrected = uncorrected,
+                    corrected = corrected,
+                    cell_col = "condition",
+                    batch_col = "batch",
+                    markers = colnames(uncorrected[2:16]))
 ```
 
 ## Preparation for FCS file export
